@@ -5,7 +5,6 @@ JsonLocale provides a simple api for managing translated data inside a json fiel
 
 ## Installation
 
-This gem requires I18n gem to be installed
 Add this line to your application's Gemfile:
 
 ```ruby
