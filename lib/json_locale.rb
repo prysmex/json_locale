@@ -8,6 +8,10 @@ module JsonLocale
       base.include InstanceMethods
     end
 
+    def self.available_locales=(locales = [])
+      @available_locales = locales
+    end
+
     module ClassMethods
 
       # adds convinience methods used for managing translations on a json type attribute
@@ -30,7 +34,7 @@ module JsonLocale
 
       def translates(attr_name, suffix: '_translations', allow_blank: false, fallback: false)
         normalized_attr_name = attr_name.to_s.sub(suffix, '').to_sym
-        I18n.available_locales.each do |locale|
+        JsonLocale::Translates.instance_variable_get('@available_locales').each do |locale|
           normalized_locale = locale.to_s.downcase.gsub(/[^a-z]/, '')
 
           # instance.title
@@ -61,6 +65,17 @@ module JsonLocale
             )
           end
 
+          define_method "set_#{normalized_attr_name}_translations" do |value, **params|
+            value.each do |locale, value|
+              write_json_translation(
+                attr_name,
+                value,
+                locale: locale,
+                allow_blank: params.fetch(:allow_blank, allow_blank)
+              )
+            end
+          end
+
         end
 
       end
@@ -81,6 +96,8 @@ module JsonLocale
 
       def write_json_translation(attr_name, value, locale:, allow_blank:)
         locale = locale.to_s
+        raise StandardError.new("invalid locale #{locale}") unless JsonLocale::Translates.instance_variable_get('@available_locales').map(&:to_s).include?(locale)
+
         value = allow_blank ? value : value.presence
         translations = public_send(attr_name) || {}
         public_send("#{attr_name}_will_change!") unless translations[locale] == value
@@ -95,6 +112,7 @@ module JsonLocale
 
       def read_json_translation(attr_name, locale:, fallback:)
         locale = locale.to_s
+        raise StandardError.new("invalid locale #{locale}") unless JsonLocale::Translates.instance_variable_get('@available_locales').map(&:to_s).include?(locale)
         translations = public_send(attr_name) || {}
 
         value = if translations.key?(locale)
@@ -106,7 +124,8 @@ module JsonLocale
           when :i18n
             # ToDo
           when Array
-            fallback.find{|locale| !translations[locale].nil?}.try(:[], 1)
+            locale = fallback.find{|locale| !translations[locale].nil?}
+            locale.nil? ? nil : translations[locale]
           else
             nil
           end
