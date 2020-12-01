@@ -1,8 +1,7 @@
 # JsonLocale
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/json_locale`. To experiment with that code, run `bin/console` for an interactive prompt.
+JsonLocale provides a simple api for managing translated data inside a json field by providing convinient methods to manage the translation values, along with fallbacks and some conventions for drying your code.
 
-TODO: Delete this and the text above, and describe your gem
 
 ## Installation
 
@@ -22,14 +21,57 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+Let's build an example where you have an attribute `Country.name_translations` that you want translate in multiple locales.
 
-## Development
+Notice the suffix `_translations`, you can customize it but a suffix is required to differentiate the main method from generated methods.
 
-After checking out the repo, run `bin/setup` to install dependencies. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+```ruby
+JsonLocale::Translates.available_locales=['en', 'es', 'de']
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+class Country
+    include JsonLocale::Translates
+    # if you want to change the suffix, add suffix: '_your_suffix'
+    translates :name_translations, {allow_blank: false, fallback: false}
+end
 
-## Contributing
+record = Country.new(name_translations: {'en' => 'Germany', 'es' => 'Alemania'}
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/json_locale.
+# return raw value
+name_translations => {'en' => 'Germany', 'es' => 'Alemania'}
+```
+
+
+## Getters
+```ruby
+I18n.locale = :en
+
+# title methods
+record.title => 'Germany'
+record.title(locale: 'es') => 'Alemania'
+record.title(locale: 'de', fallback: ['es']) => 'Alemania'
+
+#return value in specific locale
+record.title_en => 'Germany'
+record.title_de(fallback:['es']) => 'Germany'
+```
+
+## Setters
+```ruby
+#set value for a specific locale
+
+record.set_name_es('') #removes the value due to allow_blank: false
+record.name_translations => {'en' => 'Germany'}
+
+record.set_name_es('', {allow_empty: true}) #override allow_empty option
+record.name_translations => {'en' => 'Germany', 'es' => ''}
+
+#used to set multiple translations at a time (merges)
+record.set_title_translations({es: 'Canadá', en: 'Canada'})
+```
+
+## Fallbacks
+```ruby
+fallback: false => # no fallback
+fallback: :any => # fall back first to the default locale, then to any other locale
+fallback: [:sv] => # explicitly declare fallbacks as an array of any length
+```
