@@ -33,7 +33,16 @@ module JsonLocale
       # - translatable_attributes
 
       def translates(attr_name, suffix: '_translations', allow_blank: false, fallback: false)
+        class << self; attr_reader :translatable_attributes; end
+        class << self; attr_reader :translatable_attributes_with_suffix; end
+
+        @translatable_attributes = [] if @translatable_attributes.nil? 
+        @translatable_attributes_with_suffix = [] if @translatable_attributes_with_suffix.nil? 
+
         normalized_attr_name = attr_name.to_s.sub(suffix, '').to_sym
+        @translatable_attributes = @translatable_attributes + [normalized_attr_name]
+        @translatable_attributes_with_suffix = @translatable_attributes_with_suffix + [attr_name]
+
         JsonLocale::Translates.instance_variable_get('@available_locales').each do |locale|
           normalized_locale = locale.to_s.downcase.gsub(/[^a-z]/, '')
 
@@ -84,9 +93,6 @@ module JsonLocale
       def translates?
         included_modules.include?(InstanceMethods)
       end
-
-      # def translatable_attributes
-      # end
 
     end
 
