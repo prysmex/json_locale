@@ -2,7 +2,6 @@
 
 JsonLocale provides a simple api for managing translated data inside a json field by providing convinient methods to manage the translation values, along with fallbacks and some conventions for drying your code.
 
-
 ## Installation
 
 Add this line to your application's Gemfile:
@@ -13,65 +12,87 @@ gem 'json_locale'
 
 And then execute:
 
-    $ bundle
+```ruby
+bundle
+```
 
 Or install it yourself as:
 
-    $ gem install json_locale
+```ruby
+gem install json_locale
+```
+
+## ToDos
+
+- customizable default suffix
 
 ## Usage
 
-Let's build an example where you have an attribute `Country.name_translations` that you want translate in multiple locales.
+First we need to configure which locales will be available
 
-Notice the suffix `_translations`, you can customize it but a suffix is required to differentiate the main method from generated methods.
+Here is a list of available configurations:
+
+- default_locale (may also be Proc)
+- available_locales
+- before_set (Proc as callback)
 
 ```ruby
-JsonLocale::Translates.available_locales=['en', 'es', 'de']
-
-class Country
-    include JsonLocale::Translates
-    # if you want to change the suffix, add suffix: '_your_suffix'
-    translates :name_translations, {allow_blank: false, fallback: false}
+JsonLocale::Translates.configure do |config|
+  config.default_locale = 'es'
+  config.available_locales = ['en', 'es', 'de']
 end
-
-record = Country.new(name_translations: {'en' => 'Germany', 'es' => 'Alemania'}
-
-# return raw value
-name_translations => {'en' => 'Germany', 'es' => 'Alemania'}
 ```
 
+Let's build an example where you have an attribute `Country.name_translations` of type *json* that you want translate in multiple locales.
+
+This gem requires that the name of the method to be translated have a suffix to differentiate the main method from generated methods. The suffix can be customized by the *suffix* param on the #translates method
+
+```ruby
+class Country
+  include JsonLocale::Translates
+  translates :name_i18n, {suffix: '_i18n', allow_blank: false, fallback: false}
+
+  def initialize(name_i18n:)
+    @name_i18n = name_i18n
+  end
+end
+
+record = Country.new(name_i18n: {'en' => 'Germany', 'es' => 'Alemania'})
+```
 
 ## Getters
+
 ```ruby
-I18n.locale = :en
+# from default
+record.name # => 'Germany'
 
-# title methods
-record.title => 'Germany'
-record.title(locale: 'es') => 'Alemania'
-record.title(locale: 'de', fallback: ['es']) => 'Alemania'
+# passing locale as param
+record.name(locale: 'es') => 'Alemania'
+record.name(locale: 'de', fallback: ['es']) => 'Alemania'
 
-#return value in specific locale
-record.title_en => 'Germany'
-record.title_de(fallback:['es']) => 'Germany'
+# specific locale by method name
+record.name_en => 'Germany'
+record.name_de(fallback:['es']) => 'Germany'
 ```
 
 ## Setters
+
 ```ruby
-#set value for a specific locale
-
+# set value for a specific locale
 record.set_name_es('') #removes the value due to allow_blank: false
-record.name_translations => {'en' => 'Germany'}
+record.set_name_es('', {allow_blank: true}) #override allow_empty option
 
-record.set_name_es('', {allow_empty: true}) #override allow_empty option
-record.name_translations => {'en' => 'Germany', 'es' => ''}
+# bulk set locales
+record.name_i18n => {'en' => 'Germany', 'es' => ''}
 
 #used to set multiple translations at a time (merges)
-record.set_title_translations({es: 'Canadá', en: 'Canada'})
+record.set_name_i18n({es: 'Canadá', en: 'Canada'})
 ```
 
-## Fallbacks
+## Fallback param
+
 ```ruby
 fallback: false => # no fallback
 fallback: :any => # fall back first to the default locale, then to any other locale
-fallback: [:sv] => # explicitly declare fallbacks as an array of any length
+fallback: ['sv'] => # explicitly declare fallbacks as an array of any length
 ```
