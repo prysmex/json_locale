@@ -3,6 +3,8 @@ require "test_helper"
 class ClassTest < Minitest::Test
 
   def setup
+    JsonLocale::Translates.set_missing_accessor = true
+
     @klass = Class.new
     @klass.include JsonLocale::Translates
     Object.const_set('Klass', @klass)
@@ -35,10 +37,6 @@ class ClassTest < Minitest::Test
     assert_equal 'en', JsonLocale::Translates.default_locale
     assert_equal 'en', JsonLocale::Translates.available_locales.first
     assert_instance_of Proc, JsonLocale::Translates.before_set
-  end
-
-  def test_available_locales_must_be_array
-    assert_raises(TypeError){ JsonLocale::Translates.available_locales = {} }
   end
 
   def test_translates?

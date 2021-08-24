@@ -32,9 +32,13 @@ First we need to configure which locales will be available
 
 Here is a list of available configurations:
 
-- default_locale (may also be Proc)
 - available_locales
 - before_set (Proc as callback)
+- default_locale (may also be Proc)
+- suffix
+- allow_blank
+- fallback
+- set_missing_accessor
 
 ```ruby
 JsonLocale::Translates.configure do |config|
@@ -43,14 +47,14 @@ JsonLocale::Translates.configure do |config|
 end
 ```
 
-Let's build an example where you have an attribute `Country.name_translations` of type *json* that you want translate in multiple locales.
+Let's build an example where you have an attribute `Country.name_translations` of type **json** that you want translate in multiple locales.
 
-This gem requires that the name of the method to be translated have a suffix to differentiate the main method from generated methods. The suffix can be customized by the *suffix* param on the #translates method
+This gem requires that the name of the method to be translated have a suffix to differentiate the main method from generated methods. The suffix can be customized by the **suffix** param on the #translates method
 
 ```ruby
 class Country
   include JsonLocale::Translates
-  translates :name_i18n, {suffix: '_i18n', allow_blank: false, fallback: false}
+  translates :name_i18n, {suffix: '_i18n', set_missing_accessor: true}
 
   def initialize(name_i18n:)
     @name_i18n = name_i18n

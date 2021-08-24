@@ -8,23 +8,37 @@ module JsonLocale
       base.include InstanceMethods
     end
 
+    # default configuration
     @available_locales = []
+    @before_set = nil
+    @default_locale = nil
+    @suffix = '_translations'
+    @allow_blank = false
+    @fallback = false
+    @set_missing_accessor = false
     
     class << self
 
-      attr_reader :available_locales
-
-      # @param [Array<Symbol>]
-      def available_locales=(locales)
-        raise TypeError.new('available_locales must be an Array') unless locales.is_a? Array
-        @available_locales = locales
-      end
+      # @return [Array<Symbol>]
+      attr_accessor :available_locales
       
-      # @return [Proc, Symbol] if proc, should return Symbol
+      # @return [nil,Proc] called before setting the value, can be used for dirtiness
+      attr_accessor :before_set
+      
+      # @return [nil,Proc,String]
       attr_accessor :default_locale
 
-      # @return [Proc] called before setting the value, can be used for dirtiness
-      attr_accessor :before_set
+      # @return [String]
+      attr_accessor :suffix
+
+      # @return [Boolean]
+      attr_accessor :allow_blank
+
+      # @return [Boolean,:any,Array<String>]
+      attr_accessor :fallback
+
+      # @return [Boolean]
+      attr_accessor :set_missing_accessor
   
       # Allows gem configuration
       def configure(&block)
@@ -63,12 +77,23 @@ module JsonLocale
       # - translates
       # - translatable_attributes
       #
+      # @param [nil,Proc] before_set base attribute to be translated
+      # @param [nil,Proc,String] default_locale base attribute to be translated
       # @param [Symbol] attr_name base attribute to be translated
       # @param [Symbol] suffix suffix of your translated methods
       # @param [Boolean] allow_blank
       # @param [false, :any, Array<String>] fallback
+      # @param [Boolean] set_missing_accessor, if true defines accessor from attr_name param
       # @return [void]
-      def translates(attr_name, suffix: '_translations', allow_blank: false, fallback: false)
+      def translates(attr_name,
+          before_set: JsonLocale::Translates.before_set,
+          default_locale: JsonLocale::Translates.default_locale,
+          suffix: JsonLocale::Translates.suffix,
+          allow_blank: JsonLocale::Translates.allow_blank,
+          fallback: JsonLocale::Translates.fallback,
+          set_missing_accessor: JsonLocale::Translates.set_missing_accessor
+        )
+        
         attr_name = attr_name.to_s
 
         if attr_name.match(Regexp.new("#{suffix}\\z")).nil?
@@ -77,8 +102,11 @@ module JsonLocale
 
         # only run on first call
         @translatable_attributes = [] if @translatable_attributes.nil?
-        attr_reader attr_name unless respond_to? attr_name
-        attr_writer attr_name unless respond_to? "#{attr_name}="
+        
+        if set_missing_accessor
+          attr_reader attr_name unless self.instance_methods.include? attr_name
+          attr_writer attr_name unless self.instance_methods.include? "#{attr_name}="
+        end
 
         if @translatable_attributes.include?(attr_name)
           raise StandardError.new("#{attr_name} translation has already been registered")
@@ -95,7 +123,6 @@ module JsonLocale
 
           # define getter
           define_method :"#{attr_without_suffix}" do |**params|
-            default_locale = JsonLocale::Translates.default_locale
             default_locale = default_locale.call if default_locale.is_a?(Proc)
             read_json_translation(
               attr_name,
@@ -106,7 +133,6 @@ module JsonLocale
 
           # define getter
           define_method :"#{attr_without_suffix}_#{normalized_locale}" do |**params|
-            puts "fallback => #{fallback}"
             read_json_translation(
               attr_name,
               locale: normalized_locale,
@@ -180,7 +206,6 @@ module JsonLocale
       # @param [Symbol] attr_name
       # @param [Symbol] locale
       # @param [false, :any, Array<Symbol>] fallback if Array, values must be locales
-      #
       # @return [String] the value of the specified locale
       def read_json_translation(attr_name, locale:, fallback:)
         locale = locale&.to_s
