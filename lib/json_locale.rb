@@ -93,43 +93,57 @@ module JsonLocale
           fallback: JsonLocale::Translates.fallback,
           set_missing_accessor: JsonLocale::Translates.set_missing_accessor
         )
-        
+
         attr_name = attr_name.to_s
 
         if attr_name.match(Regexp.new("#{suffix}\\z")).nil?
           raise StandardError.new("#{attr_name} does not contain the suffix #{suffix}")
         end
 
-        # only run on first call
-        @translatable_attributes = [] if @translatable_attributes.nil?
-        
+        if @translatable_attributes.nil?
+          @translatable_attributes = []
+        else
+          if @translatable_attributes.include?(attr_name)
+            raise StandardError.new("#{attr_name} translation has already been registered")
+          end
+        end
+
         if set_missing_accessor
           attr_reader attr_name unless self.instance_methods.include? attr_name
           attr_writer attr_name unless self.instance_methods.include? "#{attr_name}="
         end
-
-        if @translatable_attributes.include?(attr_name)
-          raise StandardError.new("#{attr_name} translation has already been registered")
-        end
+        
+        @translatable_attributes.push attr_name
 
         attr_without_suffix = attr_name.sub(suffix, '')
 
-        @translatable_attributes.push attr_name
+        # define locale agnostic getter
+        define_method :"#{attr_without_suffix}" do |**params|
+          locale = default_locale.call if default_locale.is_a?(Proc) # careful not to override default_locale variable
+          read_json_translation(
+            attr_name,
+            locale: params.fetch(:locale, locale),
+            fallback: params.fetch(:fallback, fallback)
+          )
+        end
 
-        # add methods for each available locale
-        JsonLocale::Translates.available_locales.each do |locale|
-          str_locale = locale.to_s
-          normalized_locale = NORMALIZE_LOCALE_PROC.call(str_locale)
-
-          # define getter
-          define_method :"#{attr_without_suffix}" do |**params|
-            default_locale = default_locale.call if default_locale.is_a?(Proc)
-            read_json_translation(
+        # define locale agnostic setter
+        define_method :"set_#{attr_name}" do |value, **params|
+          value.each do |locale, value|
+            write_json_translation(
               attr_name,
-              locale: params.fetch(:locale, default_locale),
-              fallback: params.fetch(:fallback, fallback)
+              value,
+              locale: NORMALIZE_LOCALE_PROC.call(locale.to_s),
+              allow_blank: params.fetch(:allow_blank, allow_blank),
+              before_set: params.fetch(:before_set, before_set)
             )
           end
+        end
+
+        # add methods for each available locale
+        JsonLocale::Translates.available_locales.each do |av_locale|
+          str_locale = av_locale.to_s
+          normalized_locale = NORMALIZE_LOCALE_PROC.call(str_locale)
 
           # define getter
           define_method :"#{attr_without_suffix}_#{normalized_locale}" do |**params|
@@ -146,20 +160,9 @@ module JsonLocale
               attr_name,
               value,
               locale: normalized_locale,
-              allow_blank: params.fetch(:allow_blank, allow_blank)
+              allow_blank: params.fetch(:allow_blank, allow_blank),
+              before_set: params.fetch(:before_set, before_set)
             )
-          end
-
-          # define setter
-          define_method :"set_#{attr_name}" do |value, **params|
-            value.each do |locale, value|
-              write_json_translation(
-                attr_name,
-                value,
-                locale: NORMALIZE_LOCALE_PROC.call(locale.to_s),
-                allow_blank: params.fetch(:allow_blank, allow_blank)
-              )
-            end
           end
 
         end
@@ -183,14 +186,15 @@ module JsonLocale
       # @param [String] value
       # @param [Symbol] locale
       # @param [Boolean] allow_blank if true and value is nil or '', the key will be deleted
+      # @param [Proc] before_set
       # @return [void]
-      def write_json_translation(attr_name, value, locale:, allow_blank:)
+      def write_json_translation(attr_name, value, locale:, allow_blank:, before_set:)
         locale = locale&.to_s
         raise StandardError.new("invalid locale #{locale}") unless JsonLocale::Translates.available_locales.map(&:to_s).include?(locale)
 
         translations = public_send(attr_name) || {}
 
-        JsonLocale::Translates.before_set&.call(attr_name, self) unless translations[locale] == value
+        before_set&.call(attr_name, self) unless translations[locale] == value
 
         if !allow_blank && (value.nil? || value.empty?)
           translations.delete(locale)
