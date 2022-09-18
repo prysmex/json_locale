@@ -55,6 +55,11 @@ module JsonLocale
 
       attr_reader :translatable_attributes
 
+      def inherited(klass)
+        super
+        klass.instance_variable_set('@translatable_attributes', self.translatable_attributes.dup)
+      end
+
       # Adds convinience methods used for managing translations on a json type attribute
       # The translated attribute must be have the suffix '_translations
       #
