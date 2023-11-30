@@ -61,7 +61,7 @@ class ClassTest < Minitest::Test
 
   def test_raises_error_with_invalid_suffix
     assert_raises(StandardError){
-      @klass.translates :name_translations, {suffix: '_i18n'}
+      @klass.translates :name_translations, suffix: '_i18n'
     }
   end
 
@@ -71,7 +71,7 @@ class ClassTest < Minitest::Test
     end
 
     @klass.translates :name_translations
-    @klass.translates :title_i18n, {suffix: '_i18n', allow_blank: true}
+    @klass.translates :title_i18n, suffix: '_i18n', allow_blank: true
     record = @klass.new
     
     # single language
@@ -92,7 +92,7 @@ class ClassTest < Minitest::Test
     assert_equal false, record.name_translations.key?('en')
 
     # allow_blank override
-    record.set_name_es('', {allow_blank: true})
+    record.set_name_es('', allow_blank: true)
     assert_equal '', record.name_translations['es']
 
     # allow_blank param when false
@@ -107,8 +107,8 @@ class ClassTest < Minitest::Test
       config.available_locales = ['es', 'en', 'de']
     end
 
-    @klass.translates :name_translations, {fallback: false}
-    @klass.translates :title_i18n, {suffix: '_i18n', fallback: ['es']}
+    @klass.translates :name_translations, fallback: false
+    @klass.translates :title_i18n, suffix: '_i18n', fallback: ['es']
     record = @klass.new
 
     # getters

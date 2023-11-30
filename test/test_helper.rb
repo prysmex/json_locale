@@ -2,6 +2,6 @@ require 'minitest/autorun'
 require 'minitest/spec'
 require 'minitest/reporters'
 require 'json_locale'
-require 'byebug'
+require 'debug'
 
 Minitest::Reporters.use!
