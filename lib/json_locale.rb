@@ -1,8 +1,9 @@
-require "json_locale/version"
+# frozen_string_literal: true
+
+require 'json_locale/version'
 
 module JsonLocale
   module Translates
-
     def self.included(base)
       base.extend ClassMethods
       base.include InstanceMethods
@@ -16,15 +17,14 @@ module JsonLocale
     @allow_blank = false
     @fallback = false
     @set_missing_accessor = false
-    
-    class << self
 
+    class << self
       # @return [Array<Symbol>]
       attr_accessor :available_locales
-      
+
       # @return [nil,Proc] called before setting the value, can be used for dirtiness
       attr_accessor :before_set
-      
+
       # @return [nil,Proc,String]
       attr_accessor :default_locale
 
@@ -39,17 +39,15 @@ module JsonLocale
 
       # @return [Boolean]
       attr_accessor :set_missing_accessor
-  
+
       # Allows gem configuration
-      def configure(&block)
+      def configure
         yield self
       end
-
     end
 
     module ClassMethods
-
-      NORMALIZE_LOCALE_PROC = Proc.new do |locale|
+      NORMALIZE_LOCALE_PROC = proc do |locale|
         locale.downcase.gsub(/[^a-z]/, '')
       end
 
@@ -57,7 +55,7 @@ module JsonLocale
 
       def inherited(klass)
         super
-        klass.instance_variable_set('@translatable_attributes', self.translatable_attributes.dup)
+        klass.instance_variable_set(:@translatable_attributes, translatable_attributes.dup)
       end
 
       # Adds convinience methods used for managing translations on a json type attribute
@@ -68,7 +66,7 @@ module JsonLocale
       #     include JsonLocale::Translates
       #     translates :name_translations, {}
       #   end
-      # 
+      #
       # Available instance methods:
       #
       # - instance.name
@@ -90,14 +88,15 @@ module JsonLocale
       # @param [false, :any, Array<String>] fallback
       # @param [Boolean] set_missing_accessor, if true defines accessor from attr_name param
       # @return [void]
-      def translates(attr_name,
-          before_set: JsonLocale::Translates.before_set,
-          default_locale: JsonLocale::Translates.default_locale,
-          suffix: JsonLocale::Translates.suffix,
-          allow_blank: JsonLocale::Translates.allow_blank,
-          fallback: JsonLocale::Translates.fallback,
-          set_missing_accessor: JsonLocale::Translates.set_missing_accessor
-        )
+      def translates(
+        attr_name,
+        before_set: JsonLocale::Translates.before_set,
+        default_locale: JsonLocale::Translates.default_locale,
+        suffix: JsonLocale::Translates.suffix,
+        allow_blank: JsonLocale::Translates.allow_blank,
+        fallback: JsonLocale::Translates.fallback,
+        set_missing_accessor: JsonLocale::Translates.set_missing_accessor
+      )
 
         attr_name = attr_name.to_s
 
@@ -107,17 +106,15 @@ module JsonLocale
 
         if @translatable_attributes.nil?
           @translatable_attributes = []
-        else
-          if @translatable_attributes.include?(attr_name)
-            raise StandardError.new("#{attr_name} translation has already been registered")
-          end
+        elsif @translatable_attributes.include?(attr_name)
+          raise StandardError.new("#{attr_name} translation has already been registered")
         end
 
         if set_missing_accessor
-          attr_reader attr_name unless self.instance_methods.include? attr_name
-          attr_writer attr_name unless self.instance_methods.include? "#{attr_name}="
+          attr_reader attr_name unless instance_methods.include? attr_name
+          attr_writer attr_name unless instance_methods.include? "#{attr_name}="
         end
-        
+
         @translatable_attributes.push attr_name
 
         attr_without_suffix = attr_name.sub(suffix, '')
@@ -134,10 +131,10 @@ module JsonLocale
 
         # define locale agnostic setter
         define_method :"set_#{attr_name}" do |value, **params|
-          value.each do |locale, value|
+          value.each do |locale, val|
             write_json_translation(
               attr_name,
-              value,
+              val,
               locale: NORMALIZE_LOCALE_PROC.call(locale.to_s),
               allow_blank: params.fetch(:allow_blank, allow_blank),
               before_set: params.fetch(:before_set, before_set)
@@ -169,20 +166,16 @@ module JsonLocale
               before_set: params.fetch(:before_set, before_set)
             )
           end
-
         end
-
       end
 
       # @return [Boolean] true if the class supports attribute translation
       def translates?
         included_modules.include?(InstanceMethods)
       end
-
     end
 
     module InstanceMethods
-
       private
 
       # Sets a value for a specific locale
@@ -195,7 +188,9 @@ module JsonLocale
       # @return [void]
       def write_json_translation(attr_name, value, locale:, allow_blank:, before_set:)
         locale = locale&.to_s
-        raise StandardError.new("invalid locale #{locale}") unless JsonLocale::Translates.available_locales.map(&:to_s).include?(locale)
+        unless JsonLocale::Translates.available_locales.map(&:to_s).include?(locale)
+          raise StandardError.new("invalid locale #{locale}")
+        end
 
         translations = public_send(attr_name) || {}
 
@@ -207,7 +202,7 @@ module JsonLocale
           translations[locale] = value
         end
 
-        public_send("#{attr_name}=", translations)
+        public_send(:"#{attr_name}=", translations)
       end
 
       # Get a value for a specific locale
@@ -218,7 +213,10 @@ module JsonLocale
       # @return [String] the value of the specified locale
       def read_json_translation(attr_name, locale:, fallback:)
         locale = locale&.to_s
-        raise StandardError.new("invalid locale #{locale}") unless JsonLocale::Translates.available_locales.map(&:to_s).include?(locale)
+        unless JsonLocale::Translates.available_locales.map(&:to_s).include?(locale)
+          raise StandardError.new("invalid locale #{locale}")
+        end
+
         translations = public_send(attr_name) || {}
 
         if translations.key?(locale)
@@ -226,15 +224,13 @@ module JsonLocale
         else
           case fallback
           when :any
-            translations.find{|k,v| !v.nil?}.try(:[], 1)
+            translations.find { |_k, v| !v.nil? }.try(:[], 1)
           when Array
-            locale = fallback.find{|locale| !translations[locale].nil?}
+            locale = fallback.find { |locale| !translations[locale].nil? }
             locale.nil? ? nil : translations[locale]
           end
         end
       end
-
     end
-
   end
 end
