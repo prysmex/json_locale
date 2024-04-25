@@ -9,15 +9,6 @@ module JsonLocale
       base.include InstanceMethods
     end
 
-    # default configuration
-    @available_locales = []
-    @before_set = nil
-    @default_locale = nil
-    @suffix = '_translations'
-    @allow_blank = false
-    @fallback = false
-    @set_missing_accessor = false
-
     class << self
       # @return [Array<Symbol>]
       attr_accessor :available_locales
@@ -40,11 +31,29 @@ module JsonLocale
       # @return [Boolean]
       attr_accessor :set_missing_accessor
 
+      # @return [Boolean]
+      attr_accessor :fallback_on_presence
+
       # Allows gem configuration
       def configure
         yield self
       end
+
+      # default configuration
+      def reset_configuration!
+        @available_locales = []
+        @before_set = nil
+        @default_locale = nil
+        @suffix = '_translations'
+        @allow_blank = false
+        @fallback = false
+        @set_missing_accessor = false
+        @fallback_on_presence = true
+      end
+
     end
+
+    reset_configuration!
 
     module ClassMethods
       NORMALIZE_LOCALE_PROC = proc do |locale|
@@ -87,6 +96,7 @@ module JsonLocale
       # @param [Boolean] allow_blank
       # @param [false, :any, Array<String>] fallback
       # @param [Boolean] set_missing_accessor, if true defines accessor from attr_name param
+      # @param [Boolean] fallback_on_presence
       # @return [void]
       def translates(
         attr_name,
@@ -95,7 +105,8 @@ module JsonLocale
         suffix: JsonLocale::Translates.suffix,
         allow_blank: JsonLocale::Translates.allow_blank,
         fallback: JsonLocale::Translates.fallback,
-        set_missing_accessor: JsonLocale::Translates.set_missing_accessor
+        set_missing_accessor: JsonLocale::Translates.set_missing_accessor,
+        fallback_on_presence: JsonLocale::Translates.fallback_on_presence
       )
 
         attr_name = attr_name.to_s
@@ -121,11 +132,13 @@ module JsonLocale
 
         # define locale agnostic getter
         define_method :"#{attr_without_suffix}" do |**params|
-          locale = default_locale.call if default_locale.is_a?(Proc) # careful not to override default_locale variable
+          # careful not to override default_locale variable
+          locale = default_locale.is_a?(Proc) ? default_locale.call : default_locale
           read_json_translation(
             attr_name,
             locale: params.fetch(:locale, locale),
-            fallback: params.fetch(:fallback, fallback)
+            fallback: params.fetch(:fallback, fallback),
+            fallback_on_presence: params.fetch(:fallback_on_presence, fallback_on_presence)
           )
         end
 
@@ -152,7 +165,8 @@ module JsonLocale
             read_json_translation(
               attr_name,
               locale: normalized_locale,
-              fallback: params.fetch(:fallback, fallback)
+              fallback: params.fetch(:fallback, fallback),
+              fallback_on_presence: params.fetch(:fallback_on_presence, fallback_on_presence)
             )
           end
 
@@ -183,7 +197,7 @@ module JsonLocale
       # @param [Symbol] attr_name
       # @param [String] value
       # @param [Symbol] locale
-      # @param [Boolean] allow_blank if true and value is nil or '', the key will be deleted
+      # @param [Boolean] allow_blank if fakse and value is nil or '', the key will be deleted
       # @param [Proc] before_set
       # @return [void]
       def write_json_translation(attr_name, value, locale:, allow_blank:, before_set:)
@@ -210,25 +224,44 @@ module JsonLocale
       # @param [Symbol] attr_name
       # @param [Symbol] locale
       # @param [false, :any, Array<Symbol>] fallback if Array, values must be locales
+      # @param [Boolean] fallback_on_presence
       # @return [String] the value of the specified locale
-      def read_json_translation(attr_name, locale:, fallback:)
+      def read_json_translation(attr_name, locale:, fallback:, fallback_on_presence:)
         locale = locale&.to_s
         unless JsonLocale::Translates.available_locales.map(&:to_s).include?(locale)
           raise StandardError.new("invalid locale #{locale}")
         end
 
-        translations = public_send(attr_name) || {}
+        translations = public_send(attr_name)
+        return unless translations
 
-        if translations.key?(locale)
-          translations[locale]
+        value = translations[locale]
+        return value if matches?(translations, locale, fallback_on_presence:)
+
+        case fallback
+        when :any, true
+          fallback(translations.except(locale), fallback_on_presence:)
+        when String
+          translations[fallback]
+        when Array
+          fallback(translations.slice(*fallback), fallback_on_presence:)
+        end
+      end
+
+      # @return [NilClass|String]
+      def fallback(translations, **)
+        translations.find do |locale, _value|
+          matches?(translations, locale, **)
+        end&.last
+      end
+
+      # @return [Boolean]
+      def matches?(translations, locale, fallback_on_presence:)
+        if fallback_on_presence
+          value = translations[locale]
+          !value.nil? && value != ''
         else
-          case fallback
-          when :any
-            translations.find { |_k, v| !v.nil? }.try(:[], 1)
-          when Array
-            locale = fallback.find { |locale| !translations[locale].nil? }
-            locale.nil? ? nil : translations[locale]
-          end
+          translations.key?(locale)
         end
       end
     end
