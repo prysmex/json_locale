@@ -108,7 +108,6 @@ module JsonLocale
         set_missing_accessor: JsonLocale::Translates.set_missing_accessor,
         fallback_on_presence: JsonLocale::Translates.fallback_on_presence
       )
-
         attr_name = attr_name.to_s
 
         if attr_name.match(Regexp.new("#{suffix}\\z")).nil?
